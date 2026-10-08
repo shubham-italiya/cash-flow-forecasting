@@ -1,0 +1,47 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Cash-flow forecast API - a container-image Lambda that loads its model from a versioned S3 bucket.
+
+Parameters:
+  ModelPrefix:
+    Type: String
+    Default: models/latest/
+    Description: Folder in the bucket that holds metadata.json and the model files.
+
+Resources:
+  ModelBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      VersioningConfiguration:
+        Status: Enabled          # every uploaded model version is kept; roll back by restoring an older version
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  ForecastFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      PackageType: Image
+      Architectures: [x86_64]
+      MemorySize: 2048
+      Timeout: 60
+      Environment:
+        Variables:
+          MODEL_S3_URI: !Sub "s3://${ModelBucket}/${ModelPrefix}"
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref ModelBucket
+      FunctionUrlConfig:
+        AuthType: AWS_IAM        # callers need IAM credentials; nothing is public
+    Metadata:
+      DockerContext: ..
+      Dockerfile: deploy/Dockerfile
+      DockerTag: v1
+
+Outputs:
+  ModelBucketName:
+    Value: !Ref ModelBucket
+  ForecastFunctionUrl:
+    Value: !GetAtt ForecastFunctionUrl.FunctionUrl
